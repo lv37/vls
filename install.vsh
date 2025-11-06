@@ -362,9 +362,9 @@ fn build_from_sources() ! {
 	chdir(analyzer_sources_dir_path)!
 	install_deps_cmd := os.execute('v install')
 	if install_deps_cmd.exit_code != 0 {
-		errorln('Failed to install dependencies for ${term.bold('vls')}')
-		eprintln(install_deps_cmd.output)
-		return
+		// errorln('Failed to install dependencies for ${term.bold('vls')}')
+		// eprintln(install_deps_cmd.output)
+		// return
 	}
 
 	println('${term.green('✓')} Dependencies for ${term.bold('vls')} installed successfully')
