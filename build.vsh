@@ -1,6 +1,6 @@
 #!/usr/bin/env -S v
 
-// This script is used to build the v-analyzer binary.
+// This script is used to build the vls binary.
 // Usage: `v build.vsh [debug|dev|release]`
 // By default, doing just `v build.vsh` will use debug mode.
 import os
@@ -9,7 +9,7 @@ import term
 import time
 
 const vexe = @VEXE
-const bin_path = './bin/v-analyzer' + $if windows { '.exe' } $else { '' }
+const bin_path = './bin/vls' + $if windows { '.exe' } $else { '' }
 const build_time = time.now()
 const build_commit = get_build_commit()
 const build_datetime = build_time.format_ss()
@@ -92,7 +92,7 @@ fn (m ReleaseMode) compile_cmd() string {
 	$if !windows {
 		// Treesitter's generated C code uses gotos;
 		// Older V versions of the json codegen generated `if(cond) \nstatement; statement2;` with wrong indentation, instead of blocks;
-		// => Adding the flags below allows v-analyzer to be compiled with -cstrict, and wider range of supported C compilers
+		// => Adding the flags below allows vls to be compiled with -cstrict, and wider range of supported C compilers
 		resulting_cmd += ' -cflags "-Wno-misleading-indentation -Wno-jump-misses-init -Wno-error=jump-misses-init -Wno-typedef-redefinition"'
 	}
 	return resulting_cmd
@@ -115,11 +115,11 @@ fn build(mode ReleaseMode, explicit_debug bool) {
 
 	vexe_version := os.execute('${os.quoted_path(vexe)} version').output.trim_space()
 	println('${ynote} Building with ${vexe_version} .')
-	println('${ynote} Building v-analyzer at commit: ${build_commit} .')
+	println('${ynote} Building vls at commit: ${build_commit} .')
 	println('${ynote} Building start time: ${build_datetime} .')
 
 	cmd := mode.compile_cmd()
-	println('${ynote} Compiling v-analyzer in ${term.bold(mode.str())} mode, using:')
+	println('${ynote} Compiling vls in ${term.bold(mode.str())} mode, using:')
 	println(cmd)
 	if mode == .release {
 		println('This may take 1-2 minutes... Please wait.')
@@ -134,7 +134,7 @@ fn build(mode ReleaseMode, explicit_debug bool) {
 	}
 
 	os.execute_opt(cmd) or {
-		eline('Failed to build v-analyzer')
+		eline('Failed to build vls')
 		eprintln(err)
 		exit(1)
 	}
@@ -144,7 +144,7 @@ fn build(mode ReleaseMode, explicit_debug bool) {
 	println('${ynote} The binary size in bytes is: ${nbytes:8} .')
 	println('${ynote} The binary is located here: ${term.bold(final_path)} .')
 	elapsed_ms := f64((time.now() - build_time).milliseconds())
-	println('${gcheck} Successfully built v-analyzer, in ${elapsed_ms / 1000.0:5.3f}s .')
+	println('${gcheck} Successfully built vls, in ${elapsed_ms / 1000.0:5.3f}s .')
 }
 
 // main program:
@@ -153,43 +153,43 @@ os.setenv('BUILD_DATETIME', build_datetime, true)
 os.setenv('BUILD_COMMIT', build_commit, true)
 
 mut cmd := cli.Command{
-	name:        'v-analyzer-builder'
+	name:        'vls-builder'
 	version:     'unknown'
-	description: 'Builds the v-analyzer binary.'
+	description: 'Builds the vls binary.'
 	posix_mode:  true
 	execute:     fn (_ cli.Command) ! {
 		build(.debug, false)
 	}
 }
 
-// debug builds the v-analyzer binary in debug mode.
+// debug builds the vls binary in debug mode.
 // This is the default mode.
 // Thanks to -d use_libbacktrace, the binary will print beautiful stack traces,
 // which is very useful for debugging.
 cmd.add_command(cli.Command{
 	name:        'debug'
-	description: 'Builds the v-analyzer binary in debug mode.'
+	description: 'Builds the vls binary in debug mode.'
 	execute:     fn (_ cli.Command) ! {
 		build(.debug, true)
 	}
 })
 
-// dev builds the v-analyzer binary in development mode.
+// dev builds the vls binary in development mode.
 // In this mode, additional development features are enabled.
 cmd.add_command(cli.Command{
 	name:        'dev'
-	description: 'Builds the v-analyzer binary in development mode.'
+	description: 'Builds the vls binary in development mode.'
 	execute:     fn (_ cli.Command) ! {
 		build(.dev, false)
 	}
 })
 
-// release builds the v-analyzer binary in release mode.
+// release builds the vls binary in release mode.
 // This is the recommended mode for production use.
 // It is about 30-40% faster than debug mode.
 cmd.add_command(cli.Command{
 	name:        'release'
-	description: 'Builds the v-analyzer binary in release mode.'
+	description: 'Builds the vls binary in release mode.'
 	execute:     fn (_ cli.Command) ! {
 		build(.release, false)
 	}

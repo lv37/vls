@@ -1,6 +1,6 @@
 #!/usr/bin/env -S v
 
-// This script is used to install and update v-analyzer.
+// This script is used to install and update vls.
 import os
 import json
 import term
@@ -9,10 +9,10 @@ import cli
 import net.http
 
 const installer_version = '0.0.6'
-const analyzer_config_dir_path = join_path(home_dir(), '.config', 'v-analyzer')
+const analyzer_config_dir_path = join_path(home_dir(), '.config', 'vls')
 const analyzer_sources_dir_path = join_path(analyzer_config_dir_path, 'sources')
 const analyzer_bin_dir_path = join_path(analyzer_config_dir_path, 'bin')
-const analyzer_bin_file_path = join_path(analyzer_bin_dir_path, 'v-analyzer')
+const analyzer_bin_file_path = join_path(analyzer_bin_dir_path, 'vls')
 
 const is_github_job = os.getenv('GITHUB_JOB') != ''
 
@@ -39,12 +39,12 @@ struct ReleaseInfo {
 }
 
 fn current_version() !string {
-	version_res := os.execute('v-analyzer --version')
+	version_res := os.execute('vls --version')
 	if version_res.exit_code != 0 {
 		return error('Failed to get current version: ${version_res.output}')
 	}
 
-	return version_res.output.trim_string_left('v-analyzer version ').trim_space()
+	return version_res.output.trim_string_left('vls version ').trim_space()
 }
 
 fn check_updates(release_type string) ! {
@@ -65,10 +65,10 @@ fn check_updates(release_type string) ! {
 	local_version := stable_version(cur_version)
 	asset_version := stable_version(asset.tag_name)
 	if local_version == asset_version {
-		println('You already have the latest version of ${term.bold('v-analyzer')}: ${cur_version}')
+		println('You already have the latest version of ${term.bold('vls')}: ${cur_version}')
 		return
 	}
-	println('New version of ${term.bold('v-analyzer')} is available: ${term.bold(asset.tag_name)}')
+	println('New version of ${term.bold('vls')} is available: ${term.bold(asset.tag_name)}')
 }
 
 fn stable_version(ver string) string {
@@ -104,16 +104,16 @@ fn update(nightly bool, release_type string) ! {
 	asset_version := asset.tag_name
 
 	if cur_version.trim_string_left('v') == asset_version.trim_string_left('v') {
-		println('You already have the latest version of ${term.bold('v-analyzer')}: ${cur_version}')
+		println('You already have the latest version of ${term.bold('vls')}: ${cur_version}')
 		return
 	}
 
-	println('Found new version of ${term.bold('v-analyzer')}: ${asset_version}')
+	println('Found new version of ${term.bold('vls')}: ${asset_version}')
 	install_from_binary(asset, true)!
 }
 
 fn install(no_interaction bool, release_type string) ! {
-	println('Downloading ${term.bold('v-analyzer')}...')
+	println('Downloading ${term.bold('vls')}...')
 
 	println('Fetching latest release info from GitHub...')
 	asset := find_latest_asset(release_type) or {
@@ -121,28 +121,28 @@ fn install(no_interaction bool, release_type string) ! {
 		return
 	}
 
-	println('Found ${term.bold('v-analyzer')} binary for your platform: ${asset.os_arch()}')
+	println('Found ${term.bold('vls')} binary for your platform: ${asset.os_arch()}')
 	install_from_binary(asset, false)!
 }
 
 fn install_from_binary(asset ReleaseAsset, update bool) ! {
 	println('> Download from url: ${asset.browser_download_url} ...')
-	print('Downloading ${term.bold('v-analyzer')} archive')
+	print('Downloading ${term.bold('vls')} archive')
 	os.flush()
 
-	archive_temp_dir := os.join_path(os.temp_dir(), 'v-analyzer', 'archive')
+	archive_temp_dir := os.join_path(os.temp_dir(), 'vls', 'archive')
 	os.mkdir_all(archive_temp_dir) or {
 		println('Failed to create temp directory for archive: ${archive_temp_dir}')
 		return
 	}
 
-	archive_temp_path := os.join_path(archive_temp_dir, 'v-analyzer.zip')
+	archive_temp_path := os.join_path(archive_temp_dir, 'vls.zip')
 
 	download_file_with_progress(asset.browser_download_url, archive_temp_path)
 
-	println('${term.green('✓')} Successfully downloaded ${term.bold('v-analyzer')} archive')
+	println('${term.green('✓')} Successfully downloaded ${term.bold('vls')} archive')
 
-	println('Extracting ${term.bold('v-analyzer')} archive...')
+	println('Extracting ${term.bold('vls')} archive...')
 	os.mkdir_all(analyzer_bin_dir_path) or {
 		println('Failed to create directory: ${analyzer_bin_dir_path}')
 		return
@@ -153,7 +153,7 @@ fn install_from_binary(asset ReleaseAsset, update bool) ! {
 		return
 	}
 
-	println('${term.green('✓')} Successfully extracted ${term.bold('v-analyzer')} archive')
+	println('${term.green('✓')} Successfully extracted ${term.bold('vls')} archive')
 
 	os.chmod(analyzer_bin_file_path, 0o777) or {
 		println('Failed to make executable: ${err}')
@@ -161,7 +161,7 @@ fn install_from_binary(asset ReleaseAsset, update bool) ! {
 	}
 
 	if update {
-		println('${term.green('✓')} ${term.bold('v-analyzer')} successfully updated to ${term.bold(asset.tag_name)}')
+		println('${term.green('✓')} ${term.bold('vls')} successfully updated to ${term.bold(asset.tag_name)}')
 	}
 
 	show_info_about_binary(analyzer_bin_file_path)
@@ -177,7 +177,7 @@ fn install_from_binary(asset ReleaseAsset, update bool) ! {
 }
 
 fn find_latest_asset(release_type string) !ReleaseAsset {
-	text := http.get_text('https://api.github.com/repos/lv37/v-analyzer/releases/tags/nightly')
+	text := http.get_text('https://api.github.com/repos/lv37/vls/releases/tags/nightly')
 	res := json.decode(ReleaseInfo, text) or {
 		errorln('Failed to decode JSON response from GitHub: ${err}')
 		return error('Failed to decode JSON response from GitHub: ${err}')
@@ -254,7 +254,7 @@ fn update_from_sources(update bool, nightly bool) ! {
 	}
 
 	if need_pull {
-		println('Updating ${term.bold('v-analyzer')} sources...')
+		println('Updating ${term.bold('vls')} sources...')
 
 		res := os.execute('git -C ${analyzer_sources_dir_path} pull')
 		if res.exit_code != 0 {
@@ -262,7 +262,7 @@ fn update_from_sources(update bool, nightly bool) ! {
 			return
 		}
 
-		println('${term.green('✓')} Successfully updated ${term.bold('v-analyzer')} sources')
+		println('${term.green('✓')} Successfully updated ${term.bold('vls')} sources')
 	}
 
 	build_from_sources()!
@@ -279,7 +279,7 @@ fn update_from_sources(update bool, nightly bool) ! {
 			hash
 		}
 
-		println('${term.green('✓')} ${term.bold('v-analyzer')} successfully updated to ${updated_version}')
+		println('${term.green('✓')} ${term.bold('vls')} successfully updated to ${updated_version}')
 	}
 
 	show_info_about_binary(analyzer_bin_file_path)
@@ -304,7 +304,7 @@ fn get_latest_commit_hash() !string {
 const git_clone_options = '--filter=blob:none --recursive --shallow-submodules'
 
 fn install_from_sources(no_interaction bool) ! {
-	println('${term.yellow('[WARNING]')} Currently ${term.bold('v-analyzer')} has no prebuilt binaries for your platform')
+	println('${term.yellow('[WARNING]')} Currently ${term.bold('vls')} has no prebuilt binaries for your platform')
 
 	// Used primarily for VS Code extension
 	if !(is_github_job || no_interaction) {
@@ -312,15 +312,15 @@ fn install_from_sources(no_interaction bool) ! {
 		if answer != 'y' {
 			println('')
 			println('Ending the update process')
-			warnln('${term.bold('v-analyzer')} is not installed!')
+			warnln('${term.bold('vls')} is not installed!')
 			println('')
 			println('${term.bold('[NOTE]')} If you want to build it from sources manually, run the following commands:')
-			println('git clone ${git_clone_options} https://github.com/lv37/v-analyzer.git')
-			println('cd v-analyzer')
+			println('git clone ${git_clone_options} https://github.com/lv37/vls.git')
+			println('cd vls')
 			println('v build.vsh')
 			println(term.gray('# Optionally you can move the binary to the standard location:'))
 			println('mkdir -p ${analyzer_bin_dir_path}')
-			println('cp ./bin/v-analyzer ${analyzer_bin_dir_path}')
+			println('cp ./bin/vls ${analyzer_bin_dir_path}')
 			return
 		}
 	}
@@ -342,59 +342,59 @@ fn install_from_sources(no_interaction bool) ! {
 }
 
 fn clone_repository() ! {
-	println('Cloning ${term.bold('v-analyzer')} repository...')
+	println('Cloning ${term.bold('vls')} repository...')
 
-	exit_code := run_command('git clone ${git_clone_options} https://github.com/lv37/v-analyzer.git ${analyzer_sources_dir_path} 2>&1') or {
-		errorln('Failed to clone v-analyzer repository: ${err}')
+	exit_code := run_command('git clone ${git_clone_options} https://github.com/lv37/vls.git ${analyzer_sources_dir_path} 2>&1') or {
+		errorln('Failed to clone vls repository: ${err}')
 		return
 	}
 	if exit_code != 0 {
-		errorln('Failed to clone v-analyzer repository')
+		errorln('Failed to clone vls repository')
 		return
 	}
 
-	println('${term.green('✓')} ${term.bold('v-analyzer')} repository cloned successfully')
+	println('${term.green('✓')} ${term.bold('vls')} repository cloned successfully')
 }
 
 fn build_from_sources() ! {
-	println('Building ${term.bold('v-analyzer')}...')
+	println('Building ${term.bold('vls')}...')
 
 	chdir(analyzer_sources_dir_path)!
 	install_deps_cmd := os.execute('v install')
 	if install_deps_cmd.exit_code != 0 {
-		errorln('Failed to install dependencies for ${term.bold('v-analyzer')}')
+		errorln('Failed to install dependencies for ${term.bold('vls')}')
 		eprintln(install_deps_cmd.output)
 		return
 	}
 
-	println('${term.green('✓')} Dependencies for ${term.bold('v-analyzer')} installed successfully')
+	println('${term.green('✓')} Dependencies for ${term.bold('vls')} installed successfully')
 
 	chdir(analyzer_sources_dir_path)!
 	exit_code := run_command('v build.vsh 1>/dev/null') or {
-		errorln('Failed to build ${term.bold('v-analyzer')}: ${err}')
+		errorln('Failed to build ${term.bold('vls')}: ${err}')
 		return
 	}
 	if exit_code != 0 {
-		errorln('Failed to build ${term.bold('v-analyzer')}')
+		errorln('Failed to build ${term.bold('vls')}')
 		return
 	}
 
-	println('Moving ${term.bold('v-analyzer')} binary to the standard location...')
+	println('Moving ${term.bold('vls')} binary to the standard location...')
 
 	os.mkdir_all(analyzer_bin_dir_path) or {
 		println('Failed to create directory: ${analyzer_bin_dir_path}')
 		return
 	}
 
-	os.cp_all('${analyzer_sources_dir_path}/bin/v-analyzer' + $if windows { '.exe' } $else { '' },
+	os.cp_all('${analyzer_sources_dir_path}/bin/vls' + $if windows { '.exe' } $else { '' },
 		analyzer_bin_dir_path, true) or {
-		println('Failed to copy ${term.bold('v-analyzer')} binary to ${analyzer_bin_dir_path}: ${err}')
+		println('Failed to copy ${term.bold('vls')} binary to ${analyzer_bin_dir_path}: ${err}')
 		return
 	}
 
-	println('${term.green('✓')} Successfully moved ${term.bold('v-analyzer')} binary to ${analyzer_bin_dir_path}')
+	println('${term.green('✓')} Successfully moved ${term.bold('vls')} binary to ${analyzer_bin_dir_path}')
 
-	println('${term.green('✓')} ${term.bold('v-analyzer')} built successfully')
+	println('${term.green('✓')} ${term.bold('vls')} built successfully')
 }
 
 fn already_cloned() bool {
@@ -419,7 +419,7 @@ fn show_hint_about_path_if_needed(abs_path string) {
 	print('For example in VS Code ')
 	println(term.bold('settings.json:'))
 	println('${term.bold('{')}')
-	println('    ${term.yellow('"v-analyzer.serverPath"')}: ${term.green(quoted_abs_path)}')
+	println('    ${term.yellow('"vls.serverPath"')}: ${term.green(quoted_abs_path)}')
 	println('${term.bold('}')}')
 }
 
@@ -503,9 +503,9 @@ pub fn get_release_type(cmd cli.Command) string {
 fn main() {
 	println('Installer version: ${term.bold(installer_version)}')
 	mut cmd := cli.Command{
-		name:        'v-analyzer-installer-updated'
+		name:        'vls-installer-updated'
 		version:     installer_version
-		description: 'Install and update v-analyzer'
+		description: 'Install and update vls'
 		posix_mode:  true
 		execute:     fn (cmd cli.Command) ! {
 			no_interaction := cmd.flags.get_bool('no-interaction') or { is_github_job }
@@ -515,7 +515,7 @@ fn main() {
 		flags:       [
 			cli.Flag{
 				flag:        .bool
-				name:        'no-interaction' // Used primarily for VS Code extension, to install v-analyzer from sources
+				name:        'no-interaction' // Used primarily for VS Code extension, to install vls from sources
 				description: 'Do not ask any questions, use default values'
 			},
 		]
@@ -523,7 +523,7 @@ fn main() {
 
 	cmd.add_command(cli.Command{
 		name:        'up'
-		description: 'Update v-analyzer to the latest version'
+		description: 'Update vls to the latest version'
 		posix_mode:  true
 		execute:     fn (cmd cli.Command) ! {
 			nightly := cmd.flags.get_bool('nightly') or { false }
@@ -541,22 +541,22 @@ fn main() {
 
 	cmd.add_command(cli.Command{
 		name:        'check-availability'
-		description: 'Check if v-analyzer binary is available for the current platform (service command for editors)'
+		description: 'Check if vls binary is available for the current platform (service command for editors)'
 		posix_mode:  true
 		execute:     fn (cmd cli.Command) ! {
 			release_type := get_release_type(cmd)
 			find_latest_asset(release_type) or {
-				println('Prebuild v-analyzer binary is not available for your platform')
+				println('Prebuild vls binary is not available for your platform')
 				return
 			}
 
-			println('${term.green('✓')} Prebuild v-analyzer binary is available for your platform')
+			println('${term.green('✓')} Prebuild vls binary is available for your platform')
 		}
 	})
 
 	cmd.add_command(cli.Command{
 		name:        'check-updates'
-		description: 'Checks for v-analyzer updates.'
+		description: 'Checks for vls updates.'
 		posix_mode:  true
 		execute:     fn (cmd cli.Command) ! {
 			release_type := get_release_type(cmd)
