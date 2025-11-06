@@ -25,22 +25,22 @@ jobs:
 
       - name: Install via webscript (Windows)
         if: runner.os == 'Windows'
-        run: v download https://raw.githubusercontent.com/lv37/v-analyzer/main/install.vsh; v run install.vsh; del install.vsh
+        run: v download https://raw.githubusercontent.com/lv37/vls/main/install.vsh; v run install.vsh; del install.vsh
 
       - name: Install via webscript (nix)
         if: runner.os != 'Windows'
-        run: v download https://raw.githubusercontent.com/lv37/v-analyzer/main/install.vsh; v run install.vsh; rm -rf install.vsh
+        run: v download https://raw.githubusercontent.com/lv37/vls/main/install.vsh; v run install.vsh; rm -rf install.vsh
 
       - name: Verify installation success
-        run: ~/.config/v-analyzer/bin/v-analyzer --version
+        run: ~/.config/vls/bin/vls --version
 
-      - name: Checkout v-analyzer
+      - name: Checkout vls
         uses: actions/checkout@v4
 
       - name: Cleanup and prepare installation
         shell: bash
         run: |
-          rm -r ~/.config/v-analyzer/bin/v-analyzer
+          rm -r ~/.config/vls/bin/vls
           mkdir Downloads
           mv ./install.vsh Downloads/install.vsh
 
@@ -51,4 +51,4 @@ jobs:
         run: cd Downloads && v run install.vsh
 
       - name: Verify installation success
-        run: ~/.config/v-analyzer/bin/v-analyzer --version
+        run: ~/.config/vls/bin/vls --version

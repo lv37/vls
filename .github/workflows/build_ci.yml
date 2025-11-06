@@ -41,7 +41,7 @@ jobs:
         with:
           check-latest: true
 
-      - name: Checkout v-analyzer
+      - name: Checkout VLS
         uses: actions/checkout@v4
         with:
           submodules: true
@@ -50,4 +50,4 @@ jobs:
         run: v build.vsh ${{ matrix.mode }}
 
       - name: Check if the build is successful
-        run: ./bin/v-analyzer --version
+        run: ./bin/vls --version
