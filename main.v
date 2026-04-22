@@ -1,5 +1,7 @@
 // Copyright (c) 2025 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by a GPL license that can be found in the LICENSE file.
+module main
+
 import json
 import os
 import v.pref
@@ -10,7 +12,9 @@ pub struct App {
 	cur_mod string = 'main'
 	exit    bool   = os.args.contains('exit')
 mut:
-	text string
+	text       string            // Current file content
+	open_files map[string]string // Map of file URI to file content
+	temp_dir   string            // Temporary directory for multi-file compilation
 }
 
 const v_prefs = pref.Preferences{
@@ -27,12 +31,17 @@ fn log(s string) {
 
 fn main() {
 	log('VLS (stdio mode) started. Reading from stdin...')
+	temp_dir := os.join_path(os.temp_dir(), 'vls_${os.getpid()}')
+	os.mkdir_all(temp_dir) or { panic('Failed to create temp directory: ${err}') }
 	mut app := &App{
-		text: ''
+		text:       ''
+		open_files: map[string]string{}
+		temp_dir:   temp_dir
 	}
 	mut reader := io.new_buffered_reader(reader: os.stdin(), cap: 1)
 	app.handle_stdio_requests(mut reader)
 	log('VLS exiting.')
+	os.rmdir_all(temp_dir) or { log('Failed to clean up temp directory: ${err}') }
 }
 
 fn read_request(mut reader io.BufferedReader) !string {
@@ -95,10 +104,30 @@ fn (mut app App) handle_stdio_requests(mut reader io.BufferedReader) {
 		pretty := json.encode_pretty(request)
 		log('\n\nRECV (pretty): ${pretty}')
 		method := Method.from_string(request.method)
-		log('1method="${method}" request.method="${request.method}" kek${method == .completion}')
+		log('method="${method}" request.method="${request.method}" ${method == .completion}')
 		match method {
-			.completion, .signature_help, .definition {
+			.completion, .signature_help, .definition, .hover {
 				resp := app.operation_at_pos(method, request)
+				write_response(resp)
+			}
+			.references {
+				resp := app.find_references(request)
+				write_response(resp)
+			}
+			.rename {
+				resp := app.handle_rename(request)
+				write_response(resp)
+			}
+			.formatting {
+				resp := app.handle_formatting(request)
+				write_response(resp)
+			}
+			.document_symbols {
+				resp := app.handle_document_symbols(request)
+				write_response(resp)
+			}
+			.inlay_hint {
+				resp := app.handle_inlay_hints(request)
 				write_response(resp)
 			}
 			.did_change {
@@ -111,26 +140,36 @@ fn (mut app App) handle_stdio_requests(mut reader io.BufferedReader) {
 					id:     request.id
 					result: Capabilities{
 						capabilities: Capability{
-							text_document_sync:      TextDocumentSyncOptions{
+							text_document_sync:           TextDocumentSyncOptions{
 								open_close: true
 								change:     1 // 1 = Full sync
 							}
-							completion_provider:     CompletionProvider{
-								trigger_characters: ['.']
+							completion_provider:          CompletionProvider{
+								trigger_characters: ['.', ' ']
 								completion_item:    CompletionItemCapability{
 									snippet_support: true
 								}
 							}
-							signature_help_provider: SignatureHelpOptions{
+							signature_help_provider:      SignatureHelpOptions{
 								trigger_characters: ['(', ',']
 							}
-							definition_provider:     true
+							definition_provider:          true
+							hover_provider:               true
+							references_provider:          true
+							rename_provider:              true
+							document_formatting_provider: true
+							document_symbol_provider:     true
+							inlay_hint_provider:          true
 						}
 					}
 				}
 				write_response(response)
 			}
-			.initialized, .did_open, .set_trace, .cancel_request {
+			.did_open {
+				log('DID_OPEN')
+				app.on_did_open(request)
+			}
+			.initialized, .set_trace, .cancel_request {
 				log('Received and ignored method: ${request.method}')
 			}
 			.shutdown {

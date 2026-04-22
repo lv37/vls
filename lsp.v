@@ -1,5 +1,7 @@
 // Copyright (c) 2025 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by a GPL license that can be found in the LICENSE file.
+module main
+
 struct Request {
 	id      int
 	method  string
@@ -19,7 +21,9 @@ struct TextDocumentIdentifier {
 struct Params {
 	content_changes []ContentChange @[json: 'contentChanges']
 	position        Position
+	range           LSPRange
 	text_document   TextDocumentIdentifier @[json: 'textDocument']
+	new_name        string                 @[json: 'newName']
 }
 
 struct ContentChange {
@@ -38,7 +42,44 @@ struct Location {
 	range LSPRange
 }
 
-type ResponseResult = string | []Detail | Capabilities | SignatureHelp | Location
+type ResponseResult = string
+	| []Detail
+	| Capabilities
+	| SignatureHelp
+	| Location
+	| Hover
+	| []Location
+	| WorkspaceEdit
+	| []TextEdit
+	| []DocumentSymbol
+	| []InlayHint
+
+struct DocumentSymbol {
+	name            string           @[json: 'name']
+	kind            int              @[json: 'kind']
+	range           LSPRange         @[json: 'range']
+	selection_range LSPRange         @[json: 'selectionRange']
+	children        []DocumentSymbol @[json: 'children']
+}
+
+// LSP SymbolKind constants for the most common V declarations
+const sym_kind_file = 1
+const sym_kind_module = 2
+const sym_kind_namespace = 3
+const sym_kind_package = 4
+const sym_kind_class = 5
+const sym_kind_method = 6
+const sym_kind_property = 7
+const sym_kind_field = 8
+const sym_kind_enum = 10
+const sym_kind_interface = 11
+const sym_kind_function = 12
+const sym_kind_variable = 13
+const sym_kind_constant = 14
+const sym_kind_string = 15
+const sym_kind_struct = 23
+const sym_kind_enum_member = 22
+const sym_kind_type_parameter = 26
 
 struct Notification {
 	method  string
@@ -66,6 +107,7 @@ struct Detail {
 	kind               int    // The type of item (e.g., Method, Function, Field)
 	label              string // The name of the completion item
 	detail             string // Additional info like the function signature or return type
+	declaration        string // Full fn declaration, e.g. "fn greet(name string) string"
 	documentation      string // The documentation for the item
 	insert_text        ?string @[json: 'insertText']
 	insert_text_format ?int    @[json: 'insertTextFormat'] // 1 for PlainText, 2 for Snippet
@@ -76,10 +118,16 @@ struct Capabilities {
 }
 
 struct Capability {
-	completion_provider     CompletionProvider      @[json: 'completionProvider']
-	text_document_sync      TextDocumentSyncOptions @[json: 'textDocumentSync']
-	signature_help_provider SignatureHelpOptions    @[json: 'signatureHelpProvider']
-	definition_provider     bool                    @[json: 'definitionProvider']
+	completion_provider          CompletionProvider      @[json: 'completionProvider']
+	text_document_sync           TextDocumentSyncOptions @[json: 'textDocumentSync']
+	signature_help_provider      SignatureHelpOptions    @[json: 'signatureHelpProvider']
+	definition_provider          bool                    @[json: 'definitionProvider']
+	hover_provider               bool                    @[json: 'hoverProvider']
+	references_provider          bool                    @[json: 'referencesProvider']
+	rename_provider              bool                    @[json: 'renameProvider']
+	document_formatting_provider bool                    @[json: 'documentFormattingProvider']
+	document_symbol_provider     bool                    @[json: 'documentSymbolProvider']
+	inlay_hint_provider          bool                    @[json: 'inlayHintProvider']
 }
 
 struct CompletionItemCapability {
@@ -115,19 +163,54 @@ struct ParameterInformation {
 	label string
 }
 
+struct Hover {
+	contents MarkupContent
+	range    ?LSPRange
+}
+
+struct MarkupContent {
+	kind  string // "plaintext" or "markdown"
+	value string
+}
+
+struct WorkspaceEdit {
+	changes map[string][]TextEdit
+}
+
+struct TextEdit {
+	range    LSPRange
+	new_text string @[json: 'newText']
+}
+
+// InlayHintKind 1 = Type hint, 2 = Parameter hint
+const inlay_hint_kind_type = 1
+
+struct InlayHint {
+	position     Position
+	label        string
+	kind         int  @[json: 'kind']
+	padding_left bool @[json: 'paddingLeft']
+}
+
 enum Method {
-	unknown         @['unknown']
-	initialize      @['initialize']
-	initialized     @['initialized']
-	did_open        @['textDocument/didOpen']
-	did_change      @['textDocument/didChange']
-	definition      @['textDocument/definition']
-	completion      @['textDocument/completion']
-	signature_help  @['textDocument/signatureHelp']
-	set_trace       @['$/setTrace']
-	cancel_request  @['$/cancelRequest']
-	shutdown        @['shutdown']
-	exit            @['exit']
+	unknown           @['unknown']
+	initialize        @['initialize']
+	initialized       @['initialized']
+	did_open          @['textDocument/didOpen']
+	did_change        @['textDocument/didChange']
+	definition        @['textDocument/definition']
+	completion        @['textDocument/completion']
+	signature_help    @['textDocument/signatureHelp']
+	hover             @['textDocument/hover']
+	references        @['textDocument/references']
+	rename            @['textDocument/rename']
+	formatting        @['textDocument/formatting']
+	document_symbols  @['textDocument/documentSymbol']
+	inlay_hint        @['textDocument/inlayHint']
+	set_trace         @['$/setTrace']
+	cancel_request    @['$/cancelRequest']
+	shutdown          @['shutdown']
+	exit              @['exit']
 }
 
 fn Method.from_string(s string) Method {
