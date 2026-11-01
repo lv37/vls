@@ -48,16 +48,13 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Install V
-        uses: vlang/setup-v@v1.7
-        with:
-          # vls uses `-vls-mode`/`-json-errors`, which V master rejects
-          version: '0.5.2'
-
       - name: Checkout vls
         uses: actions/checkout@v4
         with:
           submodules: true
+
+      - name: Install V
+        uses: ./.github/actions/install-v
 
       - name: Compile ${{ matrix.build_type }} build
         id: compile
