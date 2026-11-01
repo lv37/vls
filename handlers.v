@@ -46,6 +46,7 @@ fn (mut app App) operation_at_pos(method Method, request Request) Response {
 			''
 		}
 	}
+
 	mut result := app.run_v_line_info(method, path, line_info)
 	if method == .completion {
 		// Check the character immediately before the cursor.

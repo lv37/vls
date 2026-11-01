@@ -225,6 +225,7 @@ fn (mut app App) run_v_check(path string, text string) []JsonError {
 					err.path
 				}
 			}
+
 			if err_file == rel_path_to_check || err_file == os.file_name(real_path) {
 				updated_err := JsonError{
 					path:    real_path
@@ -270,7 +271,8 @@ fn (mut app App) write_tracked_files_to_temp(working_dir string) !string {
 		}
 
 		// calc rel path
-		mut rel_path := normalized_real.replace(normalized_working, '').trim_string_left('/').trim_string_left('\\')
+		mut rel_path :=
+			normalized_real.replace(normalized_working, '').trim_string_left('/').trim_string_left('\\')
 		if rel_path == '' {
 			rel_path = os.file_name(real_path)
 		}
@@ -488,8 +490,7 @@ fn (mut app App) run_v_line_info(method Method, path string, line_info string) R
 				if cursor_line >= 0 && cursor_line < file_lines.len {
 					cursor_symbol = get_word_at_col(file_lines[cursor_line], cursor_col)
 					if cursor_symbol != '' {
-						doc = app.find_doc_comment_for_symbol(cursor_symbol, file_lines,
-							path)
+						doc = app.find_doc_comment_for_symbol(cursor_symbol, file_lines, path)
 					}
 				}
 			}
@@ -547,6 +548,7 @@ fn (mut app App) run_v_line_info(method Method, path string, line_info string) R
 							uri_path
 						}
 					}
+
 					log('MAPPED TO uri_path=${uri_path}')
 				}
 				result = Location{
@@ -566,5 +568,6 @@ fn (mut app App) run_v_line_info(method Method, path string, line_info string) R
 		}
 		else {}
 	}
+
 	return result
 }
