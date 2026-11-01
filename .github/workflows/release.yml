@@ -49,9 +49,10 @@ jobs:
 
     steps:
       - name: Install V
-        uses: vlang/setup-v@v1.4
+        uses: vlang/setup-v@v1.7
         with:
-          check-latest: true
+          # vls uses `-vls-mode`/`-json-errors`, which V master rejects
+          version: '0.5.2'
 
       - name: Checkout vls
         uses: actions/checkout@v4
@@ -65,7 +66,6 @@ jobs:
           VFLAGS: ${{ matrix.vflags }}
         shell: bash
         run: |
-          v up
           v run build.vsh ${{ matrix.build_type }}
           if [[ "${{ matrix.os }}" != "macos-latest" ]]; then
             strip --strip-unneeded ./bin/vls${{ matrix.bin_ext }}
@@ -120,7 +120,8 @@ jobs:
           body: ${{ steps.generate_body.outputs.BODY }}
           name: vls development build
           allowUpdates: true
-          prerelease: true
+          # the Zed extension ignores prereleases
+          prerelease: false
 
       - name: Release latest version
         if: github.ref_type == 'tag'
