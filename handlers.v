@@ -230,9 +230,7 @@ fn (mut app App) handle_rename(request Request) Response {
 }
 
 fn (app &App) get_word_at_position(file_path string, line int, col int) string {
-	content := app.open_files[path_to_uri(file_path)] or {
-		os.read_file(file_path) or { return '' }
-	}
+	content := app.open_file_content(file_path) or { os.read_file(file_path) or { return '' } }
 	lines := content.split_into_lines()
 	if line >= lines.len {
 		return ''
@@ -1111,7 +1109,7 @@ fn (mut app App) search_symbol_in_project(working_dir string, symbol string) []L
 	v_files := os.walk_ext(working_dir, '.v')
 
 	for v_file in v_files {
-		content := app.open_files[path_to_uri(v_file)] or { os.read_file(v_file) or { continue } }
+		content := app.open_file_content(v_file) or { os.read_file(v_file) or { continue } }
 		lines := content.split_into_lines()
 
 		for line_idx, line_text in lines {
