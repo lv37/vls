@@ -1,0 +1,28 @@
+name: Install V
+description: Install a prebuilt V release
+
+inputs:
+  version:
+    # vls uses `-vls-mode`/`-json-errors`, which V master rejects
+    default: '0.5.2'
+
+runs:
+  using: composite
+  steps:
+    # setup-v builds V from source, which fails for older tags
+    - shell: bash
+      run: |
+        case "${{ runner.os }}-${{ runner.arch }}" in
+          Linux-X64) asset=v_linux.zip ;;
+          Linux-ARM64) asset=v_linux_arm64.zip ;;
+          macOS-X64) asset=v_macos_x86_64.zip ;;
+          macOS-ARM64) asset=v_macos_arm64.zip ;;
+          Windows-X64) asset=v_windows.zip ;;
+          *) echo "no prebuilt V for ${{ runner.os }}-${{ runner.arch }}"; exit 1 ;;
+        esac
+        curl -fsSL --retry 3 -o "$RUNNER_TEMP/v.zip" "https://github.com/vlang/v/releases/download/${{ inputs.version }}/$asset"
+        unzip -q "$RUNNER_TEMP/v.zip" -d "$RUNNER_TEMP"
+        vdir="$RUNNER_TEMP/v"
+        if [ "$RUNNER_OS" = Windows ]; then vdir=$(cygpath -w "$vdir"); fi
+        echo "$vdir" >> "$GITHUB_PATH"
+        "$RUNNER_TEMP/v/v" version

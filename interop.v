@@ -4,24 +4,137 @@ module main
 
 import json
 import os
+import strings
 import time
 
+fn hex_nibble(c u8) ?u8 {
+	return match c {
+		`0`...`9` { u8(c - `0`) }
+		`a`...`f` { u8(c - `a` + 10) }
+		`A`...`F` { u8(c - `A` + 10) }
+		else { none }
+	}
+}
+
+fn percent_decode(s string) string {
+	if !s.contains('%') {
+		return s
+	}
+	mut out := []u8{cap: s.len}
+	mut i := 0
+	for i < s.len {
+		c := s[i]
+		if c == `%` && i + 2 < s.len {
+			hi := hex_nibble(s[i + 1]) or {
+				out << c
+				i++
+				continue
+			}
+			lo := hex_nibble(s[i + 2]) or {
+				out << c
+				i++
+				continue
+			}
+			out << u8(hi * 16 + lo)
+			i += 3
+			continue
+		}
+		out << c
+		i++
+	}
+	return out.bytestr()
+}
+
+fn path_byte_needs_escape(c u8) bool {
+	return match c {
+		`a`...`z`, `A`...`Z`, `0`...`9`, `-`, `.`, `_`, `~`, `/`, `:` { false }
+		else { true }
+	}
+}
+
+fn percent_encode_path(s string) string {
+	mut sb := strings.new_builder(s.len + 8)
+	for c in s.bytes() {
+		if path_byte_needs_escape(c) {
+			sb.write_string('%')
+			sb.write_string(c.hex().to_upper())
+		} else {
+			sb.write_u8(c)
+		}
+	}
+	return sb.str()
+}
+
 fn uri_to_path(uri string) string {
-	mut path := uri
-	// Remove file:// or file:/// prefix
-	if path.starts_with('file:///') || path.starts_with('file://') {
-		path = path[7..]
+	if uri == '' {
+		return ''
 	}
-	if path.len > 2 && path[0] == `/` && path[2] == `:` {
-		path = path[1..]
+	if !uri.starts_with('file:') {
+		return uri
 	}
-	return path
+	mut rest := uri[5..].clone()
+	mut authority := ''
+	if rest.starts_with('//') {
+		rest = rest[2..]
+		if slash := rest.index('/') {
+			authority = rest[..slash]
+			rest = rest[slash..]
+		} else {
+			authority = rest
+			rest = ''
+		}
+	}
+	if hash := rest.index('#') {
+		rest = rest[..hash]
+	}
+	if q := rest.index('?') {
+		rest = rest[..q]
+	}
+	decoded := percent_decode(rest)
+	// UNC path: file://server/share/x -> //server/share/x
+	if authority != '' && authority.to_lower() != 'localhost' {
+		return '//' + authority + decoded
+	}
+	// Windows drive path: /C:/x -> C:/x
+	if decoded.len > 2 && decoded[0] == `/` && decoded[2] == `:` {
+		return decoded[1..]
+	}
+	return decoded
 }
 
 fn path_to_uri(path string) string {
-	normalized := os.to_slash(path)
-	uri_header := if normalized.starts_with('/') { 'file://' } else { 'file:///' }
-	return uri_header + normalized
+	if path == '' {
+		return 'file:///'
+	}
+	mut normalized := os.to_slash(path)
+	if normalized.starts_with('//') {
+		return 'file:' + percent_encode_path(normalized)
+	}
+	if normalized.len >= 2 && normalized[1] == `:` {
+		normalized = '/' + normalized
+	}
+	encoded := percent_encode_path(normalized)
+	if encoded.starts_with('/') {
+		return 'file://' + encoded
+	}
+	return 'file:///' + encoded
+}
+
+// editors encode URIs differently, so match open files by path, not by URI
+fn (app &App) open_file_content(path string) ?string {
+	for uri, content in app.open_files {
+		if same_path(uri_to_path(uri), path) {
+			return content
+		}
+	}
+	return none
+}
+
+fn same_path(a string, b string) bool {
+	$if windows {
+		return os.to_slash(a).to_lower() == os.to_slash(b).to_lower()
+	}
+	return os.to_slash(a) == os.to_slash(b)
 }
 
 fn (mut app App) run_v_check(path string, text string) []JsonError {
@@ -112,6 +225,7 @@ fn (mut app App) run_v_check(path string, text string) []JsonError {
 					err.path
 				}
 			}
+
 			if err_file == rel_path_to_check || err_file == os.file_name(real_path) {
 				updated_err := JsonError{
 					path:    real_path
@@ -157,7 +271,8 @@ fn (mut app App) write_tracked_files_to_temp(working_dir string) !string {
 		}
 
 		// calc rel path
-		mut rel_path := normalized_real.replace(normalized_working, '').trim_string_left('/').trim_string_left('\\')
+		mut rel_path :=
+			normalized_real.replace(normalized_working, '').trim_string_left('/').trim_string_left('\\')
 		if rel_path == '' {
 			rel_path = os.file_name(real_path)
 		}
@@ -184,7 +299,7 @@ fn (mut app App) write_tracked_files_to_temp(working_dir string) !string {
 fn has_sibling_v_files(working_dir string, current_file string) bool {
 	v_files := os.walk_ext(working_dir, '.v')
 	for v_file in v_files {
-		if v_file != current_file {
+		if !same_path(v_file, current_file) {
 			return true
 		}
 	}
@@ -194,16 +309,18 @@ fn has_sibling_v_files(working_dir string, current_file string) bool {
 fn symlink_untracked_files(working_dir string, temp_dir string, tracked_files map[string]string) ! {
 	log('SYMLINKING FROM ${working_dir} TO ${temp_dir}')
 
+	tracked_paths := tracked_files.keys().map(uri_to_path(it))
 	v_files := os.walk_ext(working_dir, '.v')
-	for v_file in v_files {
+	outer: for v_file in v_files {
 		// skip if tracked
-		file_uri := path_to_uri(v_file)
-		if file_uri in tracked_files {
-			continue
+		for tracked in tracked_paths {
+			if same_path(tracked, v_file) {
+				continue outer
+			}
 		}
 
 		// calc rel path
-		mut rel_path := v_file.replace(working_dir, '').trim_string_left('/')
+		mut rel_path := v_file.replace(working_dir, '').trim_left('/\\')
 		if rel_path == '' {
 			rel_path = os.file_name(v_file)
 		}
@@ -216,9 +333,13 @@ fn symlink_untracked_files(working_dir string, temp_dir string, tracked_files ma
 			continue
 		}
 
-		// create symlink
+		// create symlink, copy if not allowed (Windows without Developer Mode)
 		os.symlink(v_file, temp_file_path) or {
-			log('Failed to symlink ${v_file} to ${temp_file_path}: ${err}')
+			os.cp(v_file, temp_file_path) or {
+				log('Failed to symlink or copy ${v_file} to ${temp_file_path}: ${err}')
+				continue
+			}
+			log('Copied untracked file (symlink failed): ${v_file} -> ${temp_file_path}')
 			continue
 		}
 		log('Symlinked untracked file: ${v_file} -> ${temp_file_path}')
@@ -369,8 +490,7 @@ fn (mut app App) run_v_line_info(method Method, path string, line_info string) R
 				if cursor_line >= 0 && cursor_line < file_lines.len {
 					cursor_symbol = get_word_at_col(file_lines[cursor_line], cursor_col)
 					if cursor_symbol != '' {
-						doc = app.find_doc_comment_for_symbol(cursor_symbol, file_lines,
-							path)
+						doc = app.find_doc_comment_for_symbol(cursor_symbol, file_lines, path)
 					}
 				}
 			}
@@ -428,11 +548,11 @@ fn (mut app App) run_v_line_info(method Method, path string, line_info string) R
 							uri_path
 						}
 					}
+
 					log('MAPPED TO uri_path=${uri_path}')
 				}
-				uri_header := if uri_path.starts_with('/') { 'file://' } else { 'file:///' }
 				result = Location{
-					uri:   uri_header + uri_path
+					uri:   path_to_uri(uri_path)
 					range: LSPRange{
 						start: Position{
 							line: line_nr
@@ -448,5 +568,6 @@ fn (mut app App) run_v_line_info(method Method, path string, line_info string) R
 		}
 		else {}
 	}
+
 	return result
 }

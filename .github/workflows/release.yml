@@ -48,15 +48,13 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Install V
-        uses: vlang/setup-v@v1.4
-        with:
-          check-latest: true
-
       - name: Checkout vls
         uses: actions/checkout@v4
         with:
           submodules: true
+
+      - name: Install V
+        uses: ./.github/actions/install-v
 
       - name: Compile ${{ matrix.build_type }} build
         id: compile
@@ -65,7 +63,6 @@ jobs:
           VFLAGS: ${{ matrix.vflags }}
         shell: bash
         run: |
-          v up
           v run build.vsh ${{ matrix.build_type }}
           if [[ "${{ matrix.os }}" != "macos-latest" ]]; then
             strip --strip-unneeded ./bin/vls${{ matrix.bin_ext }}
@@ -73,6 +70,11 @@ jobs:
           fi
           if [[ "${{ matrix.os }}" != "windows-latest" ]]; then
             chmod +x ./bin/vls${{ matrix.bin_ext }}
+          fi
+          target="${{ matrix.target }}"
+          if [[ "$target" == darwin-* && "$(lipo -archs ./bin/vls)" != "${target#darwin-}" ]]; then
+            echo "expected ${target#darwin-}, got $(lipo -archs ./bin/vls)"
+            exit 1
           fi
           mv ./bin/vls${{ matrix.bin_ext }} ./bin/vls-${{ matrix.target }}${{ matrix.bin_ext }}
 
@@ -120,7 +122,8 @@ jobs:
           body: ${{ steps.generate_body.outputs.BODY }}
           name: vls development build
           allowUpdates: true
-          prerelease: true
+          # the Zed extension ignores prereleases
+          prerelease: false
 
       - name: Release latest version
         if: github.ref_type == 'tag'

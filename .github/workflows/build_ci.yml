@@ -35,16 +35,13 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Install V
-        id: install-v
-        uses: vlang/setup-v@v1.4
-        with:
-          check-latest: true
-
       - name: Checkout VLS
         uses: actions/checkout@v4
         with:
           submodules: true
+
+      - name: Install V
+        uses: ./.github/actions/install-v
 
       - name: Build
         run: v build.vsh ${{ matrix.mode }}

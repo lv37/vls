@@ -79,9 +79,15 @@ fn test_path_to_uri_relative() {
 }
 
 fn test_path_to_uri_with_backslashes() {
-	// Backslashes should be converted to forward slashes
-	result := path_to_uri('/home/user\\project\\main.v')
-	assert result.contains('/home/user/project/main.v') || result.contains('\\')
+	// a backslash is a filename character on POSIX and a separator on Windows
+	original := '/home/user\\project\\main.v'
+	result := path_to_uri(original)
+	assert !result.contains('\\')
+	$if windows {
+		assert uri_to_path(result) == original.replace('\\', '/')
+	} $else {
+		assert uri_to_path(result) == original
+	}
 }
 
 fn test_path_to_uri_empty() {
@@ -970,4 +976,85 @@ fn test_publish_diagnostics_params() {
 	}
 	assert params.uri == 'file:///test.v'
 	assert params.diagnostics.len == 1
+}
+
+fn test_uri_to_path_decodes_spaces_and_unicode() {
+	uri := 'file:///home/user/%C3%81rea%20de%20Trabalho/meu%20projeto/main.v'
+	assert uri_to_path(uri) == '/home/user/Área de Trabalho/meu projeto/main.v'
+}
+
+fn test_path_to_uri_round_trips_spaces_and_unicode() {
+	path := '/home/user/Área de Trabalho/meu projeto/main.v'
+	uri := path_to_uri(path)
+	assert uri == 'file:///home/user/%C3%81rea%20de%20Trabalho/meu%20projeto/main.v'
+	assert uri_to_path(uri) == path
+}
+
+fn test_open_file_content_matches_editor_encoding() {
+	mut app := &App{
+		open_files: map[string]string{}
+	}
+	app.open_files['file:///tmp/my%20proj%20(1)/main.v'] = 'buffer'
+	content := app.open_file_content('/tmp/my proj (1)/main.v') or { '' }
+	assert content == 'buffer'
+	assert app.open_file_content('/tmp/my proj (1)/other.v') == none
+}
+
+fn test_symlink_untracked_files_skips_tracked_file_with_editor_encoding() {
+	temp_dir := os.join_path(os.temp_dir(), 'vls_symlink_enc_test_${os.getpid()}')
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	project_dir := os.join_path(temp_dir, 'my proj (1)')
+	target_dir := os.join_path(temp_dir, 'target')
+	os.mkdir_all(project_dir) or { panic(err) }
+	os.mkdir_all(target_dir) or { panic(err) }
+	tracked_file := os.join_path(project_dir, 'tracked.v')
+	untracked_file := os.join_path(project_dir, 'untracked.v')
+	os.write_file(tracked_file, 'module main') or { panic(err) }
+	os.write_file(untracked_file, 'module main') or { panic(err) }
+
+	editor_uri := path_to_uri(tracked_file).replace('%28', '(').replace('%29', ')')
+	mut tracked := map[string]string{}
+	tracked[editor_uri] = 'content'
+
+	symlink_untracked_files(project_dir, target_dir, tracked) or {
+		assert false, 'Failed to symlink: ${err}'
+		return
+	}
+	assert !os.exists(os.join_path(target_dir, 'tracked.v'))
+	assert os.exists(os.join_path(target_dir, 'untracked.v'))
+}
+
+fn test_run_v_check_sees_sibling_files_in_percent_encoded_path() {
+	temp_dir := os.join_path(os.temp_dir(), 'vls_enc_check_${os.getpid()}')
+	defer {
+		os.rmdir_all(temp_dir) or {}
+	}
+	project_dir := os.join_path(temp_dir, 'Área de Trabalho', 'meu projeto')
+	os.mkdir_all(project_dir) or { panic(err) }
+	main_file := os.join_path(project_dir, 'main.v')
+	main_src := 'module main\n\nfn main() {\n\tother_fn()\n}\n'
+	os.write_file(main_file, main_src) or { panic(err) }
+	os.write_file(os.join_path(project_dir, 'other.v'), 'module main\n\nfn other_fn() {}\n') or {
+		panic(err)
+	}
+
+	mut app := &App{
+		temp_dir:   temp_dir
+		open_files: map[string]string{}
+	}
+	uri := path_to_uri(main_file)
+	assert uri.contains('%20') && uri.contains('%C3%81')
+
+	app.open_files[uri] = main_src
+	errors := app.run_v_check(uri, main_src)
+	assert errors.all(!it.message.contains('other_fn')), '${errors}'
+
+	// a real error must still be reported
+	broken_src := main_src + '\nfn broken() {\n\tmissing_fn()\n}\n'
+	app.open_files[uri] = broken_src
+	broken_errors := app.run_v_check(uri, broken_src)
+	assert broken_errors.any(it.message.contains('missing_fn')), '${broken_errors}'
+	assert broken_errors.all(!it.message.contains('other_fn')), '${broken_errors}'
 }
