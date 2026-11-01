@@ -68,10 +68,11 @@ fn (m ReleaseMode) compile_cmd() string {
 		}
 	}
 
+	// V passes `-arch <host arch>` to clang on macOS, which overrides `-target`
 	cflags := $if cross_compile_macos_arm64 ? {
-		'-cflags "-target arm64-apple-darwin"'
+		'-arch arm64 -cflags "-target arm64-apple-darwin"'
 	} $else $if cross_compile_macos_x86_64 ? {
-		'-cflags "-target x86_64-apple-darwin"'
+		'-arch amd64 -cflags "-target x86_64-apple-darwin"'
 	} $else $if linux {
 		if !is_nixos && m == .release {
 			'-cflags -static'

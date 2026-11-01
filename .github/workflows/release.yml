@@ -71,6 +71,11 @@ jobs:
           if [[ "${{ matrix.os }}" != "windows-latest" ]]; then
             chmod +x ./bin/vls${{ matrix.bin_ext }}
           fi
+          target="${{ matrix.target }}"
+          if [[ "$target" == darwin-* && "$(lipo -archs ./bin/vls)" != "${target#darwin-}" ]]; then
+            echo "expected ${target#darwin-}, got $(lipo -archs ./bin/vls)"
+            exit 1
+          fi
           mv ./bin/vls${{ matrix.bin_ext }} ./bin/vls-${{ matrix.target }}${{ matrix.bin_ext }}
 
       - name: Upload artifact
